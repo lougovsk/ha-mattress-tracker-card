@@ -61,6 +61,23 @@ class MattressTrackerCard extends HTMLElement {
         }
         .buttons-container mwc-button {
           flex: 1;
+          --mdc-theme-primary: var(--primary-color);
+          --mdc-button-outline-color: var(--primary-color);
+          background-color: var(--primary-color);
+          color: white;
+          border-radius: 4px;
+          --mdc-typography-button-font-size: 0.9em;
+          --mdc-button-horizontal-padding: 8px;
+          display: block;
+          height: 36px;
+          line-height: 36px;
+          text-align: center;
+          font-weight: 500;
+          cursor: pointer;
+          box-shadow: var(--shadow-elevation-2dp, 0 2px 2px 0 rgba(0,0,0,0.14), 0 3px 1px -2px rgba(0,0,0,0.12), 0 1px 5px 0 rgba(0,0,0,0.2));
+        }
+        .buttons-container mwc-button:hover {
+          filter: brightness(1.1);
         }
         .progress-container {
           margin-top: 16px;
