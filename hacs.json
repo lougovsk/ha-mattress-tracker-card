@@ -1,4 +1,6 @@
 {
-  "name": "Mattress Tracker",
+  "name": "Mattress Tracker Card",
+  "type": "plugin",
+  "filename": "mattress-tracker-card.js",
   "render_readme": true
 }
