@@ -1,19 +1,47 @@
 class MattressTrackerCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
+
   get hass() {
     return this._hass;
   }
 
   set hass(hass) {
+    const oldHass = this._hass;
     this._hass = hass;
-    if (!this.content) {
-      this.innerHTML = `
-        <ha-card>
-          <div class="card-content"></div>
-        </ha-card>
-      `;
-      this.content = this.querySelector('.card-content');
-      const style = document.createElement('style');
-      style.textContent = `
+
+    if (!this.shadowRoot.innerHTML) {
+      this._initialRender();
+    }
+
+    if (this._shouldUpdate(oldHass, hass)) {
+        this._updateCard();
+    }
+  }
+
+  _shouldUpdate(oldHass, hass) {
+    if (!oldHass) return true;
+    const mattressId = this._config.mattress_id;
+    const entities = [
+        `sensor.${mattressId}_current_side`,
+        `sensor.${mattressId}_current_rotation`,
+        `sensor.${mattressId}_last_flipped`,
+        `sensor.${mattressId}_last_rotated`
+    ];
+    return entities.some(entity => oldHass.states[entity] !== hass.states[entity]);
+  }
+
+  _initialRender() {
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host {
+          display: block;
+        }
+        ha-card {
+          padding: 16px;
+        }
         .status-container {
           display: flex;
           justify-content: space-between;
@@ -62,36 +90,37 @@ class MattressTrackerCard extends HTMLElement {
         .info-text {
           font-size: 0.9em;
           color: var(--secondary-text-color);
+          margin-bottom: 4px;
         }
         .card-header {
-          padding-bottom: 8px;
+          padding-bottom: 12px;
+          font-size: 1.2em;
+          font-weight: 500;
         }
-      `;
-      this.appendChild(style);
-    }
-
-    this.updateCard();
+        .error {
+          color: var(--error-color);
+          padding: 16px;
+        }
+      </style>
+      <ha-card>
+        <div id="content"></div>
+      </ha-card>
+    `;
+    this._content = this.shadowRoot.getElementById('content');
   }
 
-  updateCard() {
+  _updateCard() {
     const config = this._config;
     const hass = this._hass;
-
     const mattressId = config.mattress_id;
-    const sideEntityId = `sensor.${mattressId}_current_side`;
-    const rotationEntityId = `sensor.${mattressId}_current_rotation`;
-    const lastFlippedId = `sensor.${mattressId}_last_flipped`;
-    const lastRotatedId = `sensor.${mattressId}_last_rotated`;
-    const flipButtonId = `button.${mattressId}_flip`;
-    const rotateButtonId = `button.${mattressId}_rotate`;
 
-    const sideState = hass.states[sideEntityId];
-    const rotationState = hass.states[rotationEntityId];
-    const flippedState = hass.states[lastFlippedId];
-    const rotatedState = hass.states[lastRotatedId];
+    const sideState = hass.states[`sensor.${mattressId}_current_side`];
+    const rotationState = hass.states[`sensor.${mattressId}_current_rotation`];
+    const flippedState = hass.states[`sensor.${mattressId}_last_flipped`];
+    const rotatedState = hass.states[`sensor.${mattressId}_last_rotated`];
 
     if (!rotatedState) {
-        this.content.innerHTML = `<div class="error">Entity not found: ${lastRotatedId}</div>`;
+        this._content.innerHTML = `<div class="error">Entity not found: sensor.${mattressId}_last_rotated</div>`;
         return;
     }
 
@@ -101,7 +130,7 @@ class MattressTrackerCard extends HTMLElement {
     let isOverdue = false;
     let lastRotatedDisplay = 'Never';
 
-    if (lastRotatedDateStr && lastRotatedDateStr !== 'unknown' && lastRotatedDateStr !== 'unavailable') {
+    if (lastRotatedDateStr && !['unknown', 'unavailable'].includes(lastRotatedDateStr)) {
         const lastRotatedDate = new Date(lastRotatedDateStr);
         const now = new Date();
         const diffTime = Math.abs(now - lastRotatedDate);
@@ -116,26 +145,29 @@ class MattressTrackerCard extends HTMLElement {
 
     const progressColor = isOverdue ? 'var(--error-color)' : 'var(--primary-color)';
 
-    this.content.innerHTML = `
-      ${config.title ? `<div class="card-header"><div class="name">${config.title}</div></div>` : ''}
+    const lastFlippedDateStr = flippedState ? flippedState.state : 'unknown';
+    let lastFlippedDisplay = 'Never';
+    if (lastFlippedDateStr && !['unknown', 'unavailable'].includes(lastFlippedDateStr)) {
+        lastFlippedDisplay = new Date(lastFlippedDateStr).toLocaleDateString();
+    }
+
+    // Using a template string for structure, but being mindful of content
+    this._content.innerHTML = `
+      ${config.title ? `<div class="card-header">${this._escapeHtml(config.title)}</div>` : ''}
       <div class="status-container">
         <div class="status-item">
           <ha-icon icon="mdi:file-replace"></ha-icon>
-          <span>Side: ${sideState ? sideState.state : 'Unknown'}</span>
+          <span>Side: ${this._escapeHtml(sideState ? sideState.state : 'Unknown')}</span>
         </div>
         <div class="status-item">
           <ha-icon icon="mdi:rotate-right"></ha-icon>
-          <span>Orientation: ${rotationState ? rotationState.state : 'Unknown'}</span>
+          <span>Orientation: ${this._escapeHtml(rotationState ? rotationState.state : 'Unknown')}</span>
         </div>
       </div>
 
       <div class="buttons-container">
-        <mwc-button raised id="flip-btn">
-          Flip Mattress
-        </mwc-button>
-        <mwc-button raised id="rotate-btn">
-          Rotate Mattress
-        </mwc-button>
+        <mwc-button raised id="flip-btn">Flip Mattress</mwc-button>
+        <mwc-button raised id="rotate-btn">Rotate Mattress</mwc-button>
       </div>
 
       <div class="progress-container">
@@ -147,7 +179,7 @@ class MattressTrackerCard extends HTMLElement {
           ${diffMonths.toFixed(1)} months elapsed / ${limitMonths} months limit (${Math.round((diffMonths / limitMonths) * 100)}%)
         </div>
         <div class="info-text">Last rotated: ${lastRotatedDisplay}</div>
-        <div class="info-text">Last flipped: ${flippedState ? flippedState.state : 'Never'}</div>
+        <div class="info-text">Last flipped: ${lastFlippedDisplay}</div>
         ${isOverdue ? `
           <div class="overdue">
             <ha-icon icon="mdi:alert"></ha-icon>
@@ -157,8 +189,17 @@ class MattressTrackerCard extends HTMLElement {
       </div>
     `;
 
-    this.content.querySelector('#flip-btn').onclick = () => this._pressButton(flipButtonId);
-    this.content.querySelector('#rotate-btn').onclick = () => this._pressButton(rotateButtonId);
+    this.shadowRoot.getElementById('flip-btn').onclick = () => this._pressButton(`button.${mattressId}_flip`);
+    this.shadowRoot.getElementById('rotate-btn').onclick = () => this._pressButton(`button.${mattressId}_rotate`);
+  }
+
+  _escapeHtml(unsafe) {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
   }
 
   _pressButton(entityId) {
